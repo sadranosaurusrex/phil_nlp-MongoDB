@@ -1,0 +1,89 @@
+@page
+@model DataConversion.Pages.TextsModel
+@{
+    ViewData["Title"] = "Philosophical Texts";
+}
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Philosophical Texts</h2>
+        </div>
+        <div class="col-auto">
+            <form method="post" asp-page-handler="Refresh" id="refreshForm">
+                <button type="submit" class="btn btn-primary" id="refreshBtn">
+                    <span id="refreshText">
+                        <i class="fas fa-sync-alt"></i> Refresh Database
+                    </span>
+                    <span id="loadingText" style="display: none;">
+                        <i class="fas fa-spinner fa-spin"></i> Processing...
+                    </span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.Message))
+    {
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            @Model.Message
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div id="grid"></div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Handle refresh button loading state
+            $('#refreshForm').on('submit', function() {
+                $('#refreshText').hide();
+                $('#loadingText').show();
+                $('#refreshBtn').prop('disabled', true);
+            });
+
+            $("#grid").kendoGrid({
+                dataSource: {
+                    transport: {
+                        read: {
+                            url: "/api/Texts/GetTexts",
+                            type: "GET"
+                        }
+                    },
+                    pageSize: 20,
+                    serverPaging: false,
+                    serverSorting: false,
+                    serverFiltering: false
+                },
+                height: 600,
+                sortable: true,
+                pageable: {
+                    refresh: true,
+                    pageSizes: true,
+                    buttonCount: 5
+                },
+                filterable: true,
+                columns: [
+                    { field: "title", title: "Title", width: 200 },
+                    { field: "author", title: "Author", width: 150 },
+                    { field: "school", title: "School", width: 120 },
+                    { field: "originalPublicationDate", title: "Publication Date", width: 120 },
+                    { field: "corpusEditionDate", title: "Edition Date", width: 120 },
+                    { field: "sentenceCount", title: "Sentences", width: 100, filterable: false }
+                ]
+            });
+
+            // Auto-refresh grid after database refresh
+            @if (!string.IsNullOrEmpty(Model.Message) && Model.Message.Contains("successfully"))
+            {
+                <text>
+                setTimeout(function() {
+                    $("#grid").data("kendoGrid").dataSource.read();
+                }, 1000);
+                </text>
+            }
+        });
+    </script>
+}
