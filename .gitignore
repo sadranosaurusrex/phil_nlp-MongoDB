@@ -53,3 +53,6 @@ data/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# The data-set is too large and should be included manually
+DataConversion/philosophy_data.csv

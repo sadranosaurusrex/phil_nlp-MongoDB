@@ -34,11 +34,13 @@ public class TextsModel : PageModel
         try
         {
             Message = "Starting CSV import...";
-            Console.WriteLine("Starting CSV refresh...");
+            long start = DateTime.UtcNow.Ticks; ;
+            Console.WriteLine($"Starting CSV refresh at {start}...");
             
             await _dataService.RefreshDataAsync();
-            
-            Console.WriteLine("CSV refresh completed successfully");
+
+            long end = DateTime.UtcNow.Ticks;
+            Console.WriteLine($"CSV refresh completed successfully at {end}\nThis process took {end - start} ticks.");
             Message = "Database refreshed successfully!";
         }
         catch (Exception ex)
