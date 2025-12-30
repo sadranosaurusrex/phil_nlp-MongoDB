@@ -1,5 +1,6 @@
 using DataConversion.Domain.Models;
 using DataConversion.Infrastructure;
+using MongoDB.Bson;
 
 namespace DataConversion.Services;
 
@@ -44,5 +45,15 @@ public class DataService : IDataService
     public async Task<List<PhilosophicalText>> GetAllTextsAsync()
     {
         return await _mongoDbService.GetAllTextsAsync();
+    }
+
+    public async Task<PhilosophicalText> GetTextByIdAsync(ObjectId id)
+    {
+        return await _mongoDbService.GetTextByIdAsync(id);
+    }
+
+    public async Task<List<SentenceDocument>> GetSentencesByTextIdAsync(ObjectId textId)
+    {
+        return await _mongoDbService.GetSentencesByTextIdAsync(textId);
     }
 }

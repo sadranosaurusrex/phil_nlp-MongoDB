@@ -1,5 +1,6 @@
 using DataConversion.Domain.Models;
 using MongoDB.Driver;
+using MongoDB.Bson;
 
 namespace DataConversion.Services;
 
@@ -22,6 +23,16 @@ public class MongoDbService : IMongoDbService
     public async Task<List<PhilosophicalText>> GetAllTextsAsync()
     {
         return await _textsCollection.Find(_ => true).ToListAsync();
+    }
+
+    public async Task<PhilosophicalText> GetTextByIdAsync(ObjectId id)
+    {
+        return await _textsCollection.Find(t => t.Id == id).FirstOrDefaultAsync();
+    }
+
+    public async Task<List<SentenceDocument>> GetSentencesByTextIdAsync(ObjectId textId)
+    {
+        return await _sentencesCollection.Find(s => s.TextId == textId).ToListAsync();
     }
 
     public async Task RefreshDataAsync(List<PhilosophicalText> texts)

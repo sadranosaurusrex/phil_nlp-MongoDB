@@ -31,7 +31,40 @@
         </div>
     }
 
-    <div id="grid"></div>
+    <table id="textsTable" class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Title</th>
+                <th>Author</th>
+                <th>School</th>
+                <th>Publication Date</th>
+                <th>Edition Date</th>
+                <th>Sentences</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Texts.Any())
+            {
+                @foreach (var text in Model.Texts)
+                {
+                    <tr data-id="@text.Id">
+                        <td>@text.Title</td>
+                        <td>@text.Author</td>
+                        <td>@text.School</td>
+                        <td>@text.OriginalPublicationDate</td>
+                        <td>@text.CorpusEditionDate</td>
+                        <td>@text.SentenceCount</td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="6" class="text-center">No texts available.</td>
+                </tr>
+            }
+        </tbody>
+    </table>
 </div>
 
 @section Scripts {
@@ -44,46 +77,22 @@
                 $('#refreshBtn').prop('disabled', true);
             });
 
-            $("#grid").kendoGrid({
-                dataSource: {
-                    transport: {
-                        read: {
-                            url: "/api/Texts/GetTexts",
-                            type: "GET"
-                        }
-                    },
-                    pageSize: 20,
-                    serverPaging: false,
-                    serverSorting: false,
-                    serverFiltering: false
-                },
-                height: 600,
-                sortable: true,
-                pageable: {
-                    refresh: true,
-                    pageSizes: true,
-                    buttonCount: 5
-                },
-                filterable: true,
-                columns: [
-                    { field: "title", title: "Title", width: 200 },
-                    { field: "author", title: "Author", width: 150 },
-                    { field: "school", title: "School", width: 120 },
-                    { field: "originalPublicationDate", title: "Publication Date", width: 120 },
-                    { field: "corpusEditionDate", title: "Edition Date", width: 120 },
-                    { field: "sentenceCount", title: "Sentences", width: 100, filterable: false }
-                ]
+            // Initialize DataTable
+            $('#textsTable').DataTable({
+                pageLength: 20,
+                lengthMenu: [10, 20, 50, 100],
+                ordering: true,
+                searching: true,
+                responsive: true
             });
 
-            // Auto-refresh grid after database refresh
-            @if (!string.IsNullOrEmpty(Model.Message) && Model.Message.Contains("successfully"))
-            {
-                <text>
-                setTimeout(function() {
-                    $("#grid").data("kendoGrid").dataSource.read();
-                }, 1000);
-                </text>
-            }
+            // Make rows clickable
+            $('#textsTable tbody').on('click', 'tr', function () {
+                var id = $(this).data('id');
+                if (id) {
+                    window.location.href = '/TextDetails?id=' + id;
+                }
+            });
         });
     </script>
 }
