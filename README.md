@@ -1,4 +1,10 @@
 ![title](Pictures/title_image.jpeg)
+# How to use data converter app:
+The folder "DataConversion" is a minor project added to this project by me (Sadranosaurus-rex) to provide a cleaner dispaly for the dataset. To use the app you need two things to do:
+- First you have to setup MongoDB before running the app (see [here](https://www.mongodb.com/)).
+- And second you have to download the [dataset](https://huggingface.co/datasets/yjkim27/The-Philosophy-Data-Project) and move it to "DataConversion" folder.
+After you're done, you can start the app and go to "/text" to view the data. 
+
 # Philosophy NLP & Text Classification
 A book of philosophy represents an effort to systematically organize one's thought about the world. Using the data from the history of philosophy to classify texts thus enables us to, by proxy, classify how people think about the world. Where some projects focus on sentiment analysis, here we focus on conceptual, or ideological analysis. 
 
