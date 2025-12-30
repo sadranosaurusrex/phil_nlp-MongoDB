@@ -40,12 +40,11 @@ public class MongoDbService : IMongoDbService
         // Clear existing data
         await _textsCollection.DeleteManyAsync(_ => true);
         await _sentencesCollection.DeleteManyAsync(_ => true);
-        
+
         if (!texts.Any()) return;
 
         // Convert to separate collections
         var textsToInsert = new List<PhilosophicalText>();
-        var sentencesToInsert = new List<SentenceDocument>();
 
         foreach (var text in texts)
         {
@@ -58,23 +57,31 @@ public class MongoDbService : IMongoDbService
                 CorpusEditionDate = text.CorpusEditionDate,
                 SentenceCount = text.Sentences?.Count ?? 0
             };
-            
+
             textsToInsert.Add(textDoc);
         }
 
         // Insert texts first to get IDs
         await _textsCollection.InsertManyAsync(textsToInsert);
 
-        // Now insert sentences with text references in batches
-        const int batchSize = 1000;
-        for (int i = 0; i < texts.Count; i++)
+        // Create mapping of text key to ObjectId for fast lookup
+        var textIdMap = textsToInsert
+            .Select((text, index) => new { Key = $"{texts[index].Title}_{texts[index].Author}_{texts[index].School}", Id = text.Id })
+            .ToDictionary(x => x.Key, x => x.Id);
+
+        // Collect ALL sentences at once for bulk insert
+        var allSentences = new List<SentenceDocument>();
+        const int maxBatchSize = 50000; // Larger batches for better performance
+
+        foreach (var text in texts)
         {
-            var textId = textsToInsert[i].Id;
-            var sentences = texts[i].Sentences ?? new List<Sentence>();
-            
-            for (int j = 0; j < sentences.Count; j += batchSize)
+            var textKey = $"{text.Title}_{text.Author}_{text.School}";
+            if (!textIdMap.TryGetValue(textKey, out var textId)) continue;
+
+            var sentences = text.Sentences ?? new List<Sentence>();
+            foreach (var sentence in sentences)
             {
-                var batch = sentences.Skip(j).Take(batchSize).Select(sentence => new SentenceDocument
+                allSentences.Add(new SentenceDocument
                 {
                     TextId = textId,
                     SentenceSpacy = sentence.SentenceSpacy ?? string.Empty,
@@ -83,13 +90,21 @@ public class MongoDbService : IMongoDbService
                     SentenceLowered = sentence.SentenceLowered ?? string.Empty,
                     TokenizedTxt = sentence.TokenizedTxt ?? new List<string>(),
                     LemmatizedStr = sentence.LemmatizedStr ?? string.Empty
-                }).ToList();
-                
-                if (batch.Any())
-                {
-                    await _sentencesCollection.InsertManyAsync(batch);
-                }
+                });
             }
+
+            // Insert in large batches to reduce MongoDB round trips
+            if (allSentences.Count >= maxBatchSize)
+            {
+                await _sentencesCollection.InsertManyAsync(allSentences);
+                allSentences.Clear();
+            }
+        }
+
+        // Insert any remaining sentences
+        if (allSentences.Any())
+        {
+            await _sentencesCollection.InsertManyAsync(allSentences);
         }
     }
 

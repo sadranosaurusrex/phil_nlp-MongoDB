@@ -1,5 +1,6 @@
 using DataConversion.Domain.Models;
 using System.Text.Json;
+using System.Collections.Concurrent;
 
 namespace DataConversion.Infrastructure;
 
@@ -8,21 +9,23 @@ public class CsvConverter
     public static List<PhilosophicalText> ConvertCsvToTexts(string csvPath)
     {
         var lines = File.ReadAllLines(csvPath).Skip(1); // Skip header
-        var textGroups = new Dictionary<string, PhilosophicalText>();
+        var textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
 
-        foreach (var line in lines)
+        // Process lines in parallel for better performance
+        Parallel.ForEach(lines, line =>
         {
             var parts = ParseCsvLine(line);
-            if (parts.Length < 11) continue; // CSV has 11 columns, not 12
+            if (parts.Length < 11) return; // CSV has 11 columns, not 12
 
             var key = $"{parts[0]}_{parts[1]}_{parts[2]}"; // title_author_school
-            
-            if (!textGroups.ContainsKey(key))
+
+            // Thread-safe dictionary access
+            var text = textGroups.GetOrAdd(key, _ =>
             {
                 if (!int.TryParse(parts[5], out int originalDate) || !int.TryParse(parts[6], out int corpusDate))
-                    continue; // Skip if dates can't be parsed
-                    
-                textGroups[key] = new PhilosophicalText
+                    return null; // Skip if dates can't be parsed
+
+                return new PhilosophicalText
                 {
                     Title = parts[0],
                     Author = parts[1],
@@ -30,10 +33,12 @@ public class CsvConverter
                     OriginalPublicationDate = originalDate,
                     CorpusEditionDate = corpusDate
                 };
-            }
+            });
+
+            if (text == null) return; // Skip this line if text creation failed
 
             if (!int.TryParse(parts[7], out int sentenceLength))
-                continue; // Skip if sentence length can't be parsed
+                return; // Skip if sentence length can't be parsed
 
             List<string> tokenizedText = null;
             if (!string.IsNullOrEmpty(parts[9]))
@@ -52,18 +57,22 @@ public class CsvConverter
                 tokenizedText = new List<string>();
             }
 
-            textGroups[key].Sentences.Add(new Sentence
+            // Thread-safe sentence addition
+            lock (text.Sentences)
             {
-                SentenceSpacy = parts[3] ?? string.Empty,
-                SentenceStr = parts[4] ?? string.Empty,
-                SentenceLength = sentenceLength,
-                SentenceLowered = parts[8] ?? string.Empty,
-                TokenizedTxt = tokenizedText,
-                LemmatizedStr = parts[10] ?? string.Empty // Corrected index: lemmatized_str is at index 10
-            });
-        }
+                text.Sentences.Add(new Sentence
+                {
+                    SentenceSpacy = parts[3] ?? string.Empty,
+                    SentenceStr = parts[4] ?? string.Empty,
+                    SentenceLength = sentenceLength,
+                    SentenceLowered = parts[8] ?? string.Empty,
+                    TokenizedTxt = tokenizedText,
+                    LemmatizedStr = parts[10] ?? string.Empty // Corrected index: lemmatized_str is at index 10
+                });
+            }
+        });
 
-        return textGroups.Values.ToList();
+        return textGroups.Values.Where(t => t != null).ToList();
     }
 
     private static string[] ParseCsvLine(string line)
