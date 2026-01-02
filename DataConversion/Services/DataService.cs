@@ -28,17 +28,15 @@ public class DataService : IDataService
     public async Task RefreshDataAsync()
     {
         var csvPath = "philosophy_data.csv";
-        
+
         if (!File.Exists(csvPath))
         {
             throw new FileNotFoundException($"CSV file not found: {csvPath}");
         }
-        
+
         Console.WriteLine($"Processing CSV file: {csvPath}");
-        var texts = CsvConverter.ConvertCsvToTexts(csvPath);
-        Console.WriteLine($"Converted {texts.Count} texts with {texts.Sum(t => t.Sentences.Count)} sentences");
-        
-        await _mongoDbService.RefreshDataAsync(texts);
+
+        await _mongoDbService.RefreshDataAsync(csvPath);
         Console.WriteLine("Data saved to MongoDB successfully");
     }
 

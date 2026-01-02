@@ -1,44 +1,39 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Driver;
 
 namespace DataConversion.Domain.Models;
 
+[BsonIgnoreExtraElements]
 public class PhilosophicalText
 {
     [BsonId]
-    public ObjectId Id { get; set; }
+    public ObjectId PtId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Author { get; set; } = string.Empty;
-    public string School { get; set; } = string.Empty;
+    public string School  { get; set; } = string.Empty;
     public int OriginalPublicationDate { get; set; }
     public int CorpusEditionDate { get; set; }
-    public int SentenceCount { get; set; } // Store count instead of full sentences
-    
-    // Keep for CSV converter compatibility - not stored in MongoDB
-    [BsonIgnore]
-    public List<Sentence> Sentences { get; set; } = new();
+    private int _sentenceCount;
+    public int SentenceCount { get => _sentenceCount; set => _sentenceCount = value; }
+
+    public void IncrementSentenceCount ()
+    {
+        Interlocked.Increment(ref _sentenceCount);
+    }
 }
 
 public class SentenceDocument
 {
     [BsonId]
-    public ObjectId Id { get; set; }
-    public ObjectId TextId { get; set; } // Reference to PhilosophicalText
-    public string SentenceSpacy { get; set; } = string.Empty;
-    public string SentenceStr { get; set; } = string.Empty;
+    public ObjectId SentenceId { get; set; }
+    public ObjectId PtId { get; set; } // Reference to PhilosophicalText.PtId
+    public String SentenceSpacy { get; set; } = string.Empty;
+    public String SentenceStr {  get; set; } = string.Empty;
     public int SentenceLength { get; set; }
     public string SentenceLowered { get; set; } = string.Empty;
-    public List<string> TokenizedTxt { get; set; } = new();
+    public List<string> TokenizedText { get; set; } = new();
     public string LemmatizedStr { get; set; } = string.Empty;
-}
-
-// Keep original for compatibility
-public class Sentence
-{
-    public string SentenceSpacy { get; set; } = string.Empty;
-    public string SentenceStr { get; set; } = string.Empty;
-    public int SentenceLength { get; set; }
-    public string SentenceLowered { get; set; } = string.Empty;
-    public List<string> TokenizedTxt { get; set; } = new();
-    public string LemmatizedStr { get; set; } = string.Empty;
+    [BsonIgnore] // Temporary, not saved to DB
+    public string Key { get; set; } = string.Empty;
 }

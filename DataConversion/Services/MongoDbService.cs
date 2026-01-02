@@ -1,13 +1,15 @@
 using DataConversion.Domain.Models;
 using MongoDB.Driver;
 using MongoDB.Bson;
+using System.Collections.Concurrent;
+using System.Text.Json;
 
 namespace DataConversion.Services;
 
 public class MongoDbService : IMongoDbService
 {
-    private readonly IMongoCollection<PhilosophicalText> _textsCollection;
-    private readonly IMongoCollection<SentenceDocument> _sentencesCollection;
+    public readonly IMongoCollection<PhilosophicalText> _textsCollection;
+    public readonly IMongoCollection<SentenceDocument> _sentencesCollection;
 
     public MongoDbService(IConfiguration configuration)
     {
@@ -27,85 +29,91 @@ public class MongoDbService : IMongoDbService
 
     public async Task<PhilosophicalText> GetTextByIdAsync(ObjectId id)
     {
-        return await _textsCollection.Find(t => t.Id == id).FirstOrDefaultAsync();
+        return await _textsCollection.Find(t => t.PtId == id).FirstOrDefaultAsync();
     }
 
     public async Task<List<SentenceDocument>> GetSentencesByTextIdAsync(ObjectId textId)
     {
-        return await _sentencesCollection.Find(s => s.TextId == textId).ToListAsync();
+        return await _sentencesCollection.Find(s => s.PtId == textId).ToListAsync();
     }
 
-    public async Task RefreshDataAsync(List<PhilosophicalText> texts)
+    public async Task RefreshDataAsync(string csvPath)
     {
         // Clear existing data
         await _textsCollection.DeleteManyAsync(_ => true);
         await _sentencesCollection.DeleteManyAsync(_ => true);
 
-        if (!texts.Any()) return;
+        var textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
+        var sentenceDocuments = new List<SentenceDocument>();
+        var lines = File.ReadAllLines(csvPath).Skip(1);
 
-        // Convert to separate collections
-        var textsToInsert = new List<PhilosophicalText>();
-
-        foreach (var text in texts)
+        Parallel.ForEach(lines, line =>
         {
-            var textDoc = new PhilosophicalText
+            var parts = ParseCsvLine(line);
+            if (parts.Length < 11) return;
+
+            if (!int.TryParse(parts[5], out int originalDate) || !int.TryParse(parts[6], out int corpusDate))
+                return;
+
+            var key = $"{parts[0]}_{parts[1]}_{parts[2]}";
+            if (!textGroups.ContainsKey(key))
             {
-                Title = text.Title,
-                Author = text.Author,
-                School = text.School,
-                OriginalPublicationDate = text.OriginalPublicationDate,
-                CorpusEditionDate = text.CorpusEditionDate,
-                SentenceCount = text.Sentences?.Count ?? 0
-            };
-
-            textsToInsert.Add(textDoc);
-        }
-
-        // Insert texts first to get IDs
-        await _textsCollection.InsertManyAsync(textsToInsert);
-
-        // Create mapping of text key to ObjectId for fast lookup
-        var textIdMap = textsToInsert
-            .Select((text, index) => new { Key = $"{texts[index].Title}_{texts[index].Author}_{texts[index].School}", Id = text.Id })
-            .ToDictionary(x => x.Key, x => x.Id);
-
-        // Collect ALL sentences at once for bulk insert
-        var allSentences = new List<SentenceDocument>();
-        const int maxBatchSize = 50000; // Larger batches for better performance
-
-        foreach (var text in texts)
-        {
-            var textKey = $"{text.Title}_{text.Author}_{text.School}";
-            if (!textIdMap.TryGetValue(textKey, out var textId)) continue;
-
-            var sentences = text.Sentences ?? new List<Sentence>();
-            foreach (var sentence in sentences)
-            {
-                allSentences.Add(new SentenceDocument
+                var text = textGroups.GetOrAdd(key, new PhilosophicalText
                 {
-                    TextId = textId,
-                    SentenceSpacy = sentence.SentenceSpacy ?? string.Empty,
-                    SentenceStr = sentence.SentenceStr ?? string.Empty,
-                    SentenceLength = sentence.SentenceLength,
-                    SentenceLowered = sentence.SentenceLowered ?? string.Empty,
-                    TokenizedTxt = sentence.TokenizedTxt ?? new List<string>(),
-                    LemmatizedStr = sentence.LemmatizedStr ?? string.Empty
+                    Title = parts[0],
+                    Author = parts[1],
+                    School = parts[2],
+                    OriginalPublicationDate = originalDate,
+                    CorpusEditionDate = corpusDate
                 });
+                _textsCollection.InsertOne(text);
             }
 
-            // Insert in large batches to reduce MongoDB round trips
-            if (allSentences.Count >= maxBatchSize)
+            if (!int.TryParse(parts[7], out int sentenceLength)) return;
+
+                List<string> tokenizedText = new List<string>();
+            try
             {
-                await _sentencesCollection.InsertManyAsync(allSentences);
-                allSentences.Clear();
+                tokenizedText = JsonSerializer.Deserialize<List<string>>(parts[9].Replace("'", "\""));
             }
-        }
+            catch
+            {
+                tokenizedText = new List<string>();
+            }
 
-        // Insert any remaining sentences
-        if (allSentences.Any())
+            sentenceDocuments.Add(new SentenceDocument
+            {
+                PtId = textGroups[key].PtId,
+                SentenceSpacy = parts[3] ?? string.Empty,
+                SentenceStr = parts[4] ?? string.Empty,
+                SentenceLength = sentenceLength,
+                SentenceLowered = parts[8] ?? string.Empty,
+                LemmatizedStr = parts[10] ?? string.Empty,
+                TokenizedText = tokenizedText,
+                Key = key,
+            });
+            _sentencesCollection.InsertOne(sentenceDocuments.Last());
+        });
+    }
+
+    private static string[] ParseCsvLine(string line)
+    {
+        var result = new List<string>();
+        var current = "";
+        var inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
         {
-            await _sentencesCollection.InsertManyAsync(allSentences);
+            if (line[i] == '"') inQuotes = !inQuotes;
+            else if (line[i] == ',' && !inQuotes)
+            {
+                result.Add(current);
+                current = "";
+            }
+            else current += line[i];
         }
+        result.Add(current);
+        return result.ToArray();
     }
 
     public async Task<bool> HasDataAsync()

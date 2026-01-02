@@ -40,7 +40,8 @@ public class TextsModel : PageModel
             await _dataService.RefreshDataAsync();
 
             long end = DateTime.UtcNow.Ticks;
-            Console.WriteLine($"CSV refresh completed successfully at {end}\nThis process took {end - start} ticks.");
+            double durationSeconds = (end - start) / (double)TimeSpan.TicksPerSecond;
+            Console.WriteLine($"CSV refresh completed successfully at {end}\nThis process took {durationSeconds:F2} seconds.");
             Message = "Database refreshed successfully!";
         }
         catch (Exception ex)

@@ -1,80 +1,67 @@
-using DataConversion.Domain.Models;
-using System.Text.Json;
 using System.Collections.Concurrent;
+using System.Text.Json;
+using DataConversion.Domain.Models;
+using MongoDB.Driver;
 
 namespace DataConversion.Infrastructure;
 
 public class CsvConverter
 {
-    public static List<PhilosophicalText> ConvertCsvToTexts(string csvPath)
-    {
-        var lines = File.ReadAllLines(csvPath).Skip(1); // Skip header
-        var textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
+    private static readonly IMongoCollection<PhilosophicalText> _textsCollection;
+    private static readonly IMongoCollection<SentenceDocument> _sentencesCollection;
 
-        // Process lines in parallel for better performance
+    public static TextResult ConvertCsvToPhilosophicalTexts(string csvPath)
+    {
+        TextResult DataSetResult = new TextResult();
+        var lines = File.ReadAllLines(csvPath).Skip(1);
+        int indexCounter = 0;
+
         Parallel.ForEach(lines, line =>
         {
             var parts = ParseCsvLine(line);
-            if (parts.Length < 11) return; // CSV has 11 columns, not 12
+            if (parts.Length < 11) return;
 
-            var key = $"{parts[0]}_{parts[1]}_{parts[2]}"; // title_author_school
+            if (!int.TryParse(parts[5], out int originalDate) || !int.TryParse(parts[6], out int corpusDate))
+                return;
 
-            // Thread-safe dictionary access
-            var text = textGroups.GetOrAdd(key, _ =>
+            var key = $"{parts[0]}_{parts[1]}_{parts[2]}";
+            var text = DataSetResult.textGroups.GetOrAdd(key, new PhilosophicalText
             {
-                if (!int.TryParse(parts[5], out int originalDate) || !int.TryParse(parts[6], out int corpusDate))
-                    return null; // Skip if dates can't be parsed
-
-                return new PhilosophicalText
-                {
-                    Title = parts[0],
-                    Author = parts[1],
-                    School = parts[2],
-                    OriginalPublicationDate = originalDate,
-                    CorpusEditionDate = corpusDate
-                };
+                Title = parts[0],
+                Author = parts[1],
+                School = parts[2],
+                OriginalPublicationDate = originalDate,
+                CorpusEditionDate = corpusDate
             });
 
-            if (text == null) return; // Skip this line if text creation failed
+            if (text == null || !int.TryParse(parts[7], out int sentenceLength)) return;
 
-            if (!int.TryParse(parts[7], out int sentenceLength))
-                return; // Skip if sentence length can't be parsed
-
-            List<string> tokenizedText = null;
-            if (!string.IsNullOrEmpty(parts[9]))
+            List<string> tokenizedText = new List<string>();
+            try
             {
-                try
-                {
-                    tokenizedText = JsonSerializer.Deserialize<List<string>>(parts[9].Replace("'", "\""));
-                }
-                catch
-                {
-                    tokenizedText = new List<string>(); // Default to empty list if parsing fails
-                }
+                tokenizedText = JsonSerializer.Deserialize<List<string>>(parts[9].Replace("'", "\""));
             }
-            else
+            catch
             {
                 tokenizedText = new List<string>();
             }
 
-            // Thread-safe sentence addition
-            lock (text.Sentences)
+            Mongo
+
+            DataSetResult.SentenceDocuments.Add(new SentenceDocument
             {
-                text.Sentences.Add(new Sentence
-                {
-                    SentenceSpacy = parts[3] ?? string.Empty,
-                    SentenceStr = parts[4] ?? string.Empty,
-                    SentenceLength = sentenceLength,
-                    SentenceLowered = parts[8] ?? string.Empty,
-                    TokenizedTxt = tokenizedText,
-                    LemmatizedStr = parts[10] ?? string.Empty // Corrected index: lemmatized_str is at index 10
-                });
-            }
+                SentenceSpacy = parts[3] ?? string.Empty,
+                SentenceStr = parts[4] ?? string.Empty,
+                SentenceLength = sentenceLength,
+                SentenceLowered = parts[8] ?? string.Empty,
+                LemmatizedStr = parts[10] ?? string.Empty,
+                TokenizedText = tokenizedText,
+                Key = key,
+            });
         });
 
-        return textGroups.Values.Where(t => t != null).ToList();
+        return DataSetResult;
     }
-
     private static string[] ParseCsvLine(string line)
     {
         var result = new List<string>();
@@ -95,3 +82,79 @@ public class CsvConverter
         return result.ToArray();
     }
 }
+
+public class TextResult
+{
+    public ConcurrentDictionary<string, PhilosophicalText> textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
+    public List<SentenceDocument> SentenceDocuments { get; set; } = new List<SentenceDocument>();
+}
+
+//public static List<PhilosophicalText> ConvertCsvToTexts(string csvPath)
+//{
+//    var lines = File.ReadAllLines(csvPath).Skip(1); // Skip header
+//    var textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
+
+//    // Process lines in parallel for better performance
+//    Parallel.ForEach(lines, line =>
+//    {
+//        var parts = ParseCsvLine(line);
+//        if (parts.Length < 11) return; // CSV has 11 columns, not 12
+
+//        var key = $"{parts[0]}_{parts[1]}_{parts[2]}"; // title_author_school
+
+//        // Thread-safe dictionary access
+//        var text = textGroups.GetOrAdd(key, _ =>
+//        {
+//            if (!int.TryParse(parts[5], out int originalDate) || !int.TryParse(parts[6], out int corpusDate))
+//                return null; // Skip if dates can't be parsed
+
+//            return new PhilosophicalText
+//            {
+//                Title = parts[0],
+//                Author = parts[1],
+//                School = parts[2],
+//                OriginalPublicationDate = originalDate,
+//                CorpusEditionDate = corpusDate
+//            };
+
+//        });
+
+//        if (text == null) return; // Skip this line if text creation failed
+
+//        if (!int.TryParse(parts[7], out int sentenceLength))
+//            return; // Skip if sentence length can't be parsed
+
+//        List<string> tokenizedText = null;
+//        if (!string.IsNullOrEmpty(parts[9]))
+//        {
+//            try
+//            {
+//                tokenizedText = JsonSerializer.Deserialize<List<string>>(parts[9].Replace("'", "\""));
+//            }
+//            catch
+//            {
+//                tokenizedText = new List<string>(); // Default to empty list if parsing fails
+//            }
+//        }
+//        else
+//        {
+//            tokenizedText = new List<string>();
+//        }
+
+//        // Thread-safe sentence addition
+//        lock (text.Sentences)
+//        {
+//            text.Sentences.Add(new Sentence
+//            {
+//                SentenceSpacy = parts[3] ?? string.Empty,
+//                SentenceStr = parts[4] ?? string.Empty,
+//                SentenceLength = sentenceLength,
+//                SentenceLowered = parts[8] ?? string.Empty,
+//                TokenizedTxt = tokenizedText,
+//                LemmatizedStr = parts[10] ?? string.Empty // Corrected index: lemmatized_str is at index 10
+//            });
+//        }
+//    });
+
+//    return textGroups.Values.Where(t => t != null).ToList();
+//}
