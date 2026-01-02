@@ -34,6 +34,4 @@ public class SentenceDocument
     public string SentenceLowered { get; set; } = string.Empty;
     public List<string> TokenizedText { get; set; } = new();
     public string LemmatizedStr { get; set; } = string.Empty;
-    [BsonIgnore] // Temporary, not saved to DB
-    public string Key { get; set; } = string.Empty;
 }

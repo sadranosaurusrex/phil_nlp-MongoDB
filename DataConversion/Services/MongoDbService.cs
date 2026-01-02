@@ -15,11 +15,13 @@ public class MongoDbService : IMongoDbService
     {
         var connectionString = configuration.GetConnectionString("MongoDB") ?? "mongodb://localhost:27017";
         var databaseName = "PhilosophyDb";
-        
+
         var client = new MongoClient(connectionString);
         var database = client.GetDatabase(databaseName);
         _textsCollection = database.GetCollection<PhilosophicalText>("philosophical_texts");
         _sentencesCollection = database.GetCollection<SentenceDocument>("sentences");
+        var indexKeys = Builders<SentenceDocument>.IndexKeys.Ascending(s => s.PtId);
+        _sentencesCollection.Indexes.CreateOne(new CreateIndexModel<SentenceDocument>(indexKeys));
     }
 
     public async Task<List<PhilosophicalText>> GetAllTextsAsync()
@@ -39,15 +41,15 @@ public class MongoDbService : IMongoDbService
 
     public async Task RefreshDataAsync(string csvPath)
     {
-        // Clear existing data
         await _textsCollection.DeleteManyAsync(_ => true);
         await _sentencesCollection.DeleteManyAsync(_ => true);
 
         var textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
-        var sentenceDocuments = new List<SentenceDocument>();
-        var lines = File.ReadAllLines(csvPath).Skip(1);
+        var sentenceBuffer = new ConcurrentQueue<SentenceDocument>();
+        var lines = File.ReadLines(csvPath).Skip(1);
+        int batchSize = 3500;
 
-        Parallel.ForEach(lines, line =>
+        Parallel.ForEach(lines, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, line =>
         {
             var parts = ParseCsvLine(line);
             if (parts.Length < 11) return;
@@ -56,50 +58,58 @@ public class MongoDbService : IMongoDbService
                 return;
 
             var key = $"{parts[0]}_{parts[1]}_{parts[2]}";
-            if (!textGroups.ContainsKey(key))
+
+            var text = textGroups.GetOrAdd(key, k =>
             {
-                var text = textGroups.GetOrAdd(key, new PhilosophicalText
+                var newText = new PhilosophicalText
                 {
+                    PtId = ObjectId.GenerateNewId(),
                     Title = parts[0],
                     Author = parts[1],
                     School = parts[2],
                     OriginalPublicationDate = originalDate,
                     CorpusEditionDate = corpusDate
-                });
-                _textsCollection.InsertOne(text);
-            }
+                };
+                return newText;
+            });
 
             if (!int.TryParse(parts[7], out int sentenceLength)) return;
 
-                List<string> tokenizedText = new List<string>();
+            List<string> tokenizedText;
             try
             {
-                tokenizedText = JsonSerializer.Deserialize<List<string>>(parts[9].Replace("'", "\""));
+                tokenizedText = JsonSerializer.Deserialize<List<string>>(parts[9].Replace("'", "\"")) ?? new List<string>();
             }
             catch
             {
                 tokenizedText = new List<string>();
             }
 
-            sentenceDocuments.Add(new SentenceDocument
+            sentenceBuffer.Enqueue(new SentenceDocument
             {
-                PtId = textGroups[key].PtId,
+                PtId = text.PtId,
                 SentenceSpacy = parts[3] ?? string.Empty,
                 SentenceStr = parts[4] ?? string.Empty,
                 SentenceLength = sentenceLength,
                 SentenceLowered = parts[8] ?? string.Empty,
                 LemmatizedStr = parts[10] ?? string.Empty,
-                TokenizedText = tokenizedText,
-                Key = key,
+                TokenizedText = tokenizedText
             });
-            _sentencesCollection.InsertOne(sentenceDocuments.Last());
+            text.IncrementSentenceCount();
         });
+        _textsCollection.InsertMany(textGroups.Values);
+
+        for (var i = 0; i < sentenceBuffer.Count; i += batchSize)
+        {
+            var batch = sentenceBuffer.Skip(i).Take(batchSize).ToList();
+            _sentencesCollection.InsertMany(batch);
+        }
     }
 
     private static string[] ParseCsvLine(string line)
     {
         var result = new List<string>();
-        var current = "";
+        var current = new System.Text.StringBuilder();
         var inQuotes = false;
 
         for (int i = 0; i < line.Length; i++)
@@ -107,12 +117,12 @@ public class MongoDbService : IMongoDbService
             if (line[i] == '"') inQuotes = !inQuotes;
             else if (line[i] == ',' && !inQuotes)
             {
-                result.Add(current);
-                current = "";
+                result.Add(current.ToString());
+                current.Clear();
             }
-            else current += line[i];
+            else current.Append(line[i]);
         }
-        result.Add(current);
+        result.Add(current.ToString());
         return result.ToArray();
     }
 
