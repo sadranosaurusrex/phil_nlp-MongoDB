@@ -6,12 +6,10 @@ namespace DataConversion.Services;
 public class DataService : IDataService
 {
     private readonly IMongoDbService _mongoDbService;
-    private readonly IConfiguration _configuration;
 
-    public DataService(IMongoDbService mongoDbService, IConfiguration configuration)
+    public DataService(IMongoDbService mongoDbService)
     {
         _mongoDbService = mongoDbService;
-        _configuration = configuration;
     }
 
     public async Task<bool> InitializeDataAsync()
