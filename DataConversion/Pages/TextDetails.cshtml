@@ -29,7 +29,6 @@
     <table id="sentencesTable" class="table table-striped table-hover">
         <thead class="table-dark">
             <tr>
-                <th>#</th>
                 <th>Sentence</th>
                 <th>Length</th>
                 <th>Lowercased</th>
@@ -40,18 +39,15 @@
         <tbody>
             @if (Model.Sentences.Any())
             {
-                var index = 1;
                 @foreach (var sentence in Model.Sentences)
                 {
                     <tr>
-                        <td>@index</td>
                         <td>@sentence.SentenceStr</td>
                         <td>@sentence.SentenceLength</td>
                         <td>@sentence.SentenceLowered</td>
                         <td>@string.Join(", ", sentence.TokenizedText)</td>
                         <td>@sentence.LemmatizedStr</td>
                     </tr>
-                    index++;
                 }
             }
             else
