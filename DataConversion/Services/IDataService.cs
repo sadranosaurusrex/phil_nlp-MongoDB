@@ -9,5 +9,5 @@ public interface IDataService
     Task RefreshDataAsync();
     Task<List<PhilosophicalText>> GetAllTextsAsync();
     Task<PhilosophicalText> GetTextByIdAsync(ObjectId id);
-    Task<List<SentenceDocument>> GetSentencesByTextIdAsync(ObjectId textId);
+    Task<List<Sentence>> GetSentencesByTextIdAsync(ObjectId textId);
 }

@@ -1,5 +1,4 @@
 using DataConversion.Domain.Models;
-using DataConversion.Infrastructure;
 using MongoDB.Bson;
 
 namespace DataConversion.Services;
@@ -7,12 +6,10 @@ namespace DataConversion.Services;
 public class DataService : IDataService
 {
     private readonly IMongoDbService _mongoDbService;
-    private readonly IConfiguration _configuration;
 
-    public DataService(IMongoDbService mongoDbService, IConfiguration configuration)
+    public DataService(IMongoDbService mongoDbService)
     {
         _mongoDbService = mongoDbService;
-        _configuration = configuration;
     }
 
     public async Task<bool> InitializeDataAsync()
@@ -33,13 +30,11 @@ public class DataService : IDataService
         {
             throw new FileNotFoundException($"CSV file not found: {csvPath}");
         }
-        
         Console.WriteLine($"Processing CSV file: {csvPath}");
-        var texts = CsvConverter.ConvertCsvToTexts(csvPath);
-        Console.WriteLine($"Converted {texts.Count} texts with {texts.Sum(t => t.Sentences.Count)} sentences");
         
-        await _mongoDbService.RefreshDataAsync(texts);
-        Console.WriteLine("Data saved to MongoDB successfully");
+        await _mongoDbService.RefreshDataAsync(csvPath); //The main operation
+
+        Console.WriteLine("Data saved to MongoDB successfully.");
     }
 
     public async Task<List<PhilosophicalText>> GetAllTextsAsync()
@@ -52,7 +47,7 @@ public class DataService : IDataService
         return await _mongoDbService.GetTextByIdAsync(id);
     }
 
-    public async Task<List<SentenceDocument>> GetSentencesByTextIdAsync(ObjectId textId)
+    public async Task<List<Sentence>> GetSentencesByTextIdAsync(ObjectId textId)
     {
         return await _mongoDbService.GetSentencesByTextIdAsync(textId);
     }

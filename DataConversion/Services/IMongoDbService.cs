@@ -7,7 +7,7 @@ public interface IMongoDbService
 {
     Task<List<PhilosophicalText>> GetAllTextsAsync();
     Task<PhilosophicalText> GetTextByIdAsync(ObjectId id);
-    Task<List<SentenceDocument>> GetSentencesByTextIdAsync(ObjectId textId);
-    Task RefreshDataAsync(List<PhilosophicalText> texts);
+    Task<List<Sentence>> GetSentencesByTextIdAsync(ObjectId textId);
+    Task RefreshDataAsync(string cvsPath);
     Task<bool> HasDataAsync();
 }

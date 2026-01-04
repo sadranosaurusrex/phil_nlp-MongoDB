@@ -16,7 +16,7 @@ public class TextDetailsModel : PageModel
     }
 
     public PhilosophicalText Text { get; set; } = new();
-    public List<SentenceDocument> Sentences { get; set; } = new();
+    public List<Sentence> Sentences { get; set; } = new();
     public string Message { get; set; } = string.Empty;
 
     public async Task<IActionResult> OnGetAsync(string id)

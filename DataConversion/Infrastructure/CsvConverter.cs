@@ -51,16 +51,6 @@ public class CsvConverter
             {
                 tokenizedText = new List<string>();
             }
-
-            textGroups[key].Sentences.Add(new Sentence
-            {
-                SentenceSpacy = parts[3] ?? string.Empty,
-                SentenceStr = parts[4] ?? string.Empty,
-                SentenceLength = sentenceLength,
-                SentenceLowered = parts[8] ?? string.Empty,
-                TokenizedTxt = tokenizedText,
-                LemmatizedStr = parts[10] ?? string.Empty // Corrected index: lemmatized_str is at index 10
-            });
         }
 
         return textGroups.Values.ToList();

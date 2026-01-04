@@ -19,12 +19,8 @@ public class TextsModel : PageModel
 
     public async Task OnGetAsync()
     {
+        await _dataService.InitializeDataAsync(); //Refresh data if empty
         Texts = await _dataService.GetAllTextsAsync();
-        if (Texts.Count == 0)
-        {
-            await _dataService.RefreshDataAsync();
-            Texts = await _dataService.GetAllTextsAsync();
-        }
     }
 
     public async Task<IActionResult> OnPostRefreshAsync()
@@ -35,10 +31,10 @@ public class TextsModel : PageModel
             long start = DateTime.UtcNow.Ticks; ;
             Console.WriteLine($"Starting CSV refresh at {start}...");
             
-            await _dataService.RefreshDataAsync();
+            await _dataService.RefreshDataAsync(); //Refreshing data...
 
             long end = DateTime.UtcNow.Ticks;
-            Console.WriteLine($"CSV refresh completed successfully at {end}\nThis process took {end - start} ticks.");
+            Console.WriteLine($"CSV refresh completed successfully at {end}\nThis process took {(double)(end - start)/10000000.0d} seconds.");
             Message = "Database refreshed successfully!";
         }
         catch (Exception ex)
