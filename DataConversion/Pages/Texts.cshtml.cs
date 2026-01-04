@@ -19,13 +19,11 @@ public class TextsModel : PageModel
 
     public async Task OnGetAsync()
     {
-        try
+        Texts = await _dataService.GetAllTextsAsync();
+        if (Texts.Count == 0)
         {
+            await _dataService.RefreshDataAsync();
             Texts = await _dataService.GetAllTextsAsync();
-        }
-        catch (Exception ex)
-        {
-            Message = $"Error loading data: {ex.Message}";
         }
     }
 

@@ -3,6 +3,7 @@ using MongoDB.Driver;
 using MongoDB.Bson;
 using System.Collections.Concurrent;
 using System.Text.Json;
+using Microsoft.AspNetCore.Razor.TagHelpers;
 
 namespace DataConversion.Services;
 
@@ -10,6 +11,7 @@ public class MongoDbService : IMongoDbService
 {
     public readonly IMongoCollection<PhilosophicalText> _textsCollection;
     public readonly IMongoCollection<SentenceDocument> _sentencesCollection;
+    public readonly IDataService _dataService;
 
     public MongoDbService(IConfiguration configuration)
     {
@@ -26,7 +28,13 @@ public class MongoDbService : IMongoDbService
 
     public async Task<List<PhilosophicalText>> GetAllTextsAsync()
     {
-        return await _textsCollection.Find(_ => true).ToListAsync();
+        List<PhilosophicalText> text;
+        if (await _textsCollection.Find(_ => true).ToListAsync() == null)
+        {
+            await _dataService.RefreshDataAsync();
+        }
+        text = await _textsCollection.Find(_ => true).ToListAsync();
+        return text;
     }
 
     public async Task<PhilosophicalText> GetTextByIdAsync(ObjectId id)
@@ -45,7 +53,7 @@ public class MongoDbService : IMongoDbService
         await _sentencesCollection.DeleteManyAsync(_ => true);
 
         var textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
-        var sentenceBuffer = new ConcurrentQueue<SentenceDocument>();
+        var sentences = new List<SentenceDocument>();
         var lines = File.ReadLines(csvPath).Skip(1);
         int batchSize = 3500;
 
@@ -85,7 +93,7 @@ public class MongoDbService : IMongoDbService
                 tokenizedText = new List<string>();
             }
 
-            sentenceBuffer.Enqueue(new SentenceDocument
+            sentences.Add(new SentenceDocument
             {
                 PtId = text.PtId,
                 SentenceSpacy = parts[3] ?? string.Empty,
@@ -99,9 +107,9 @@ public class MongoDbService : IMongoDbService
         });
         _textsCollection.InsertMany(textGroups.Values);
 
-        for (var i = 0; i < sentenceBuffer.Count; i += batchSize)
+        for (var i = 0; i < sentences.Count; i += batchSize)
         {
-            var batch = sentenceBuffer.Skip(i).Take(batchSize).ToList();
+            var batch = sentences.Skip(i).Take(batchSize);
             _sentencesCollection.InsertMany(batch);
         }
     }
