@@ -46,7 +46,7 @@ public class MongoDbService : IMongoDbService
         var textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
         var sentences = new List<Sentence>();
         var lines = File.ReadLines(cvsPath).Skip(1).ToList();
-        int batchSize = 3500;
+        //int batchSize = 100000;
 
         Parallel.ForEach(lines, line =>
         {
@@ -88,11 +88,12 @@ public class MongoDbService : IMongoDbService
 
         _textsCollection.InsertMany(textGroups.Values); //insterting books
 
-        for (var i = 0; i < sentences.Count; i += batchSize)
-        {
-            var batch = sentences.Skip(i).Take(batchSize).ToList();
-            await _sentencesCollection.InsertManyAsync(batch);
-        }
+        //for (var i = 0; i < sentences.Count; i += batchSize)
+        //{
+        //    var batch = sentences.Skip(i).Take(batchSize).ToList();
+        //    await _sentencesCollection.InsertManyAsync(batch);
+        //}
+        await _sentencesCollection.InsertManyAsync(sentences);
     }
 
     private static string[] ParseCsvLine(string line)
