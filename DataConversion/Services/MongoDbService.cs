@@ -54,8 +54,8 @@ public class MongoDbService : IMongoDbService
             if (parts.Length < 11) return;
 
             var key = $"{parts[0]}{parts[1]}{parts[2]}";
-            var originalDate = int.Parse(parts[5]);
-            var corpusDate = int.Parse(parts[6]);
+            if (!int.TryParse(parts[5], out var originalDate)) originalDate = 0;
+            if (!int.TryParse(parts[6], out var corpusDate)) corpusDate = 0;
 
             textGroups.GetOrAdd(key, k =>
             {
@@ -93,7 +93,7 @@ public class MongoDbService : IMongoDbService
         //    var batch = sentences.Skip(i).Take(batchSize).ToList();
         //    await _sentencesCollection.InsertManyAsync(batch);
         //}
-        await _sentencesCollection.InsertManyAsync(sentences);
+        _sentencesCollection.InsertMany(sentences);
     }
 
     private static string[] ParseCsvLine(string line)

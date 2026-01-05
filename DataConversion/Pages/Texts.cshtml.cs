@@ -25,8 +25,8 @@ public class TextsModel : PageModel
 
     public async Task<IActionResult> OnPostRefreshAsync()
     {
-        try
-        {
+        //try
+        //{
             Message = "Starting CSV import...";
             long start = DateTime.UtcNow.Ticks; ;
             Console.WriteLine($"Starting CSV refresh at {start}...");
@@ -36,12 +36,12 @@ public class TextsModel : PageModel
             long end = DateTime.UtcNow.Ticks;
             Console.WriteLine($"CSV refresh completed successfully at {end}\nThis process took {(double)(end - start)/10000000.0d} seconds.");
             Message = "Database refreshed successfully!";
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error during refresh: {ex.Message}");
-            Message = $"Error refreshing data: {ex.Message}";
-        }
+        //}
+        //catch (Exception ex)
+        //{
+        //    Console.WriteLine($"Error during refresh: {ex.Message}");
+        //    Message = $"Error refreshing data: {ex.Message}";
+        //}
 
         return RedirectToPage();
     }
