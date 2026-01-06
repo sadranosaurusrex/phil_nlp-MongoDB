@@ -45,10 +45,11 @@ public class MongoDbService : IMongoDbService
 
         var textGroups = new Dictionary<string, PhilosophicalText>();
         var sentences = new List<Sentence>();
-        var lines = File.ReadLines(cvsPath).Skip(1).ToList();
-        var batchSize = 3500;
+        //var lines = File.ReadLines(cvsPath).Skip(1).ToList();
+        var batchSize = 15000;
+        List<Task> tasks = new List<Task>();
 
-        foreach (var line in lines)
+        foreach (var line in File.ReadLines(cvsPath).Skip(1))
         {
             var parts = ParseCsvLine(line);
             if (parts.Length < 11) continue;
@@ -73,7 +74,7 @@ public class MongoDbService : IMongoDbService
 
             sentences.Add(new Sentence
             {
-                Id = ObjectId.GenerateNewId(),
+                //Id = ObjectId.GenerateNewId(),
                 PtId = textGroups[key].incrementSentenceCount().Id,
                 SentenceSpacy = parts[3],
                 SentenceStr = parts[4],
@@ -85,13 +86,17 @@ public class MongoDbService : IMongoDbService
 
             if (sentences.Count > batchSize)
             {
-                _sentencesCollection.InsertMany(sentences);
-                sentences.Clear();
+                var batch = sentences;
+                sentences = new List<Sentence>();
+                tasks.Add(_sentencesCollection.InsertManyAsync(batch));
+                //tasks.Add(_sentencesCollection.InsertManyAsync(sentences));
+                //sentences.Clear();
             }
         }
 
-        await _textsCollection.InsertManyAsync(textGroups.Values);
-        await _sentencesCollection.InsertManyAsync(sentences);
+        tasks.Add(_textsCollection.InsertManyAsync(textGroups.Values));
+        tasks.Add(_sentencesCollection.InsertManyAsync(sentences));
+        await Task.WhenAll(tasks);
     }
 
     private static string[] ParseCsvLine(string line)
