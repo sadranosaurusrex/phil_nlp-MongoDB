@@ -12,13 +12,11 @@ public class PhilosophicalText
     public string School { get; set; } = string.Empty;
     public int OriginalPublicationDate { get; set; }
     public int CorpusEditionDate { get; set; }
-    private int _sentenceCount;
     public int SentenceCount {  get; set; }
+
     public PhilosophicalText incrementSentenceCount()
     {
-        Interlocked.Increment(ref _sentenceCount);
-        SentenceCount = _sentenceCount;
-
+        SentenceCount++;
         return this;
     }
 }

@@ -43,23 +43,22 @@ public class MongoDbService : IMongoDbService
         await _textsCollection.DeleteManyAsync(_ => true);
         await _sentencesCollection.DeleteManyAsync(_ => true);
 
-        var textGroups = new ConcurrentDictionary<string, PhilosophicalText>();
+        var textGroups = new Dictionary<string, PhilosophicalText>();
         var sentences = new List<Sentence>();
         var lines = File.ReadLines(cvsPath).Skip(1).ToList();
-        //int batchSize = 100000;
+        var batchSize = 3500;
 
-        Parallel.ForEach(lines, line =>
+        foreach (var line in lines)
         {
             var parts = ParseCsvLine(line);
-            if (parts.Length < 11) return;
+            if (parts.Length < 11) continue;
 
             var key = $"{parts[0]}{parts[1]}{parts[2]}";
-            if (!int.TryParse(parts[5], out var originalDate)) originalDate = 0;
-            if (!int.TryParse(parts[6], out var corpusDate)) corpusDate = 0;
+            var originalDate = int.Parse(parts[5]);
+            var corpusDate = int.Parse(parts[6]);
 
-            textGroups.GetOrAdd(key, k =>
-            {
-                return (new PhilosophicalText
+            if (!textGroups.ContainsKey(key)) {
+                textGroups.Add(key, new PhilosophicalText
                 {
                     Id = ObjectId.GenerateNewId(),
                     Title = parts[0],
@@ -68,10 +67,9 @@ public class MongoDbService : IMongoDbService
                     OriginalPublicationDate = originalDate,
                     CorpusEditionDate = corpusDate
                 });
-            });
+            }
 
             var sentenceLength = int.Parse(parts[7]);
-            List<string> tokenizedText = JsonSerializer.Deserialize<List<string>>(parts[9].Replace("'", "\"")) ?? new List<string>();
 
             sentences.Add(new Sentence
             {
@@ -82,18 +80,18 @@ public class MongoDbService : IMongoDbService
                 SentenceLength = sentenceLength,
                 SentenceLowered = parts[8],
                 LemmatizedStr = parts[10],
-                TokenizedText = tokenizedText
+                TokenizedText = parts[9].Replace("'", "").Replace("[", "").Replace("]", "").Split(", ").ToList()
             });
-        });
 
-        _textsCollection.InsertMany(textGroups.Values); //insterting books
+            if (sentences.Count > batchSize)
+            {
+                _sentencesCollection.InsertMany(sentences);
+                sentences.Clear();
+            }
+        }
 
-        //for (var i = 0; i < sentences.Count; i += batchSize)
-        //{
-        //    var batch = sentences.Skip(i).Take(batchSize).ToList();
-        //    await _sentencesCollection.InsertManyAsync(batch);
-        //}
-        _sentencesCollection.InsertMany(sentences);
+        await _textsCollection.InsertManyAsync(textGroups.Values);
+        await _sentencesCollection.InsertManyAsync(sentences);
     }
 
     private static string[] ParseCsvLine(string line)
