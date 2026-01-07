@@ -1,9 +1,6 @@
 using DataConversion.Domain.Models;
 using MongoDB.Driver;
 using MongoDB.Bson;
-using System.Collections.Concurrent;
-using System.Threading.Tasks;
-using System.Text.Json;
 
 namespace DataConversion.Services;
 
@@ -40,15 +37,19 @@ public class MongoDbService : IMongoDbService
 
     public async Task RefreshDataAsync(string cvsPath)
     {
-        await _textsCollection.DeleteManyAsync(_ => true);
-        await _sentencesCollection.DeleteManyAsync(_ => true);
+        await Task.WhenAll(
+            _textsCollection.DeleteManyAsync(_ => true),
+            _sentencesCollection.DeleteManyAsync(_ => true)
+        );
+
+        var gate = new SemaphoreSlim(20);
 
         var textGroups = new Dictionary<string, PhilosophicalText>();
         var sentences = new List<Sentence>();
         //var lines = File.ReadLines(cvsPath).Skip(1).ToList();
-        var batchSize = 15000;
+        var batchSize = 5000;
         List<Task> tasks = new List<Task>();
-
+        
         foreach (var line in File.ReadLines(cvsPath).Skip(1))
         {
             var parts = ParseCsvLine(line);
@@ -88,15 +89,27 @@ public class MongoDbService : IMongoDbService
             {
                 var batch = sentences;
                 sentences = new List<Sentence>();
-                tasks.Add(_sentencesCollection.InsertManyAsync(batch));
-                //tasks.Add(_sentencesCollection.InsertManyAsync(sentences));
-                //sentences.Clear();
+
+                await gate.WaitAsync();
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _sentencesCollection.InsertManyAsync(batch);
+                        Console.WriteLine($"inserting {batchSize} lines...");
+                    }
+                    finally
+                    {
+                        gate.Release();
+                    }
+                }));
             }
         }
 
         tasks.Add(_textsCollection.InsertManyAsync(textGroups.Values));
         tasks.Add(_sentencesCollection.InsertManyAsync(sentences));
         await Task.WhenAll(tasks);
+        gate.Dispose();
     }
 
     private static string[] ParseCsvLine(string line)
