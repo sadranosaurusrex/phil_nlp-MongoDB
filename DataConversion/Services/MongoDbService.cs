@@ -47,7 +47,7 @@ public class MongoDbService : IMongoDbService
         var textGroups = new Dictionary<string, PhilosophicalText>();
         var sentences = new List<Sentence>();
         //var lines = File.ReadLines(cvsPath).Skip(1).ToList();
-        var batchSize = 5000;
+        var batchSize = 15000;
         List<Task> tasks = new List<Task>();
         
         foreach (var line in File.ReadLines(cvsPath).Skip(1))
@@ -96,11 +96,11 @@ public class MongoDbService : IMongoDbService
                     try
                     {
                         await _sentencesCollection.InsertManyAsync(batch);
-                        Console.WriteLine($"inserting {batchSize} lines...");
                     }
                     finally
                     {
                         gate.Release();
+                        Console.WriteLine($"inserting {batchSize} lines...");
                     }
                 }));
             }
@@ -114,21 +114,21 @@ public class MongoDbService : IMongoDbService
 
     private static string[] ParseCsvLine(string line)
     {
+        ReadOnlySpan<char> span = line.AsSpan();
         var result = new List<string>();
-        var current = "";
+        var current = 0;
         var inQuotes = false;
 
-        for (int i = 0; i < line.Length; i++)
+        for (int i = 0; i < span.Length; i++)
         {
-            if (line[i] == '"') inQuotes = !inQuotes;
-            else if (line[i] == ',' && !inQuotes)
+            if (span[i] == '"') inQuotes = !inQuotes;
+            else if (span[i] == ',' && !inQuotes)
             {
-                result.Add(current);
-                current = "";
+                result.Add(span.Slice(current, i -current).ToString());
+                current = i +1;
             }
-            else current += line[i];
         }
-        result.Add(current);
+        result.Add(span.Slice(current).ToString());
         return result.ToArray();
     }
     public async Task<bool> HasDataAsync()
